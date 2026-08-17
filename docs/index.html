@@ -116,6 +116,21 @@ body {
 <div id="rotate-overlay">Rotate your device to landscape to play</div>
 <script>
 (function() {
+  function bumpResize() {
+    // Mobile browsers sometimes fire resize/orientationchange before the
+    // viewport has actually finished settling, leaving Godot's canvas
+    // sized to a stale (pre-rotation) rect. Re-poke it a couple times.
+    window.dispatchEvent(new Event('resize'));
+    setTimeout(function() { window.dispatchEvent(new Event('resize')); }, 150);
+    setTimeout(function() { window.dispatchEvent(new Event('resize')); }, 400);
+  }
+  window.addEventListener('orientationchange', bumpResize);
+  window.addEventListener('fullscreenchange', bumpResize);
+  window.addEventListener('webkitfullscreenchange', bumpResize);
+  if (screen.orientation) {
+    screen.orientation.addEventListener('change', bumpResize);
+  }
+
   window.addEventListener('pointerdown', function tryLandscape() {
     window.removeEventListener('pointerdown', tryLandscape);
     var el = document.documentElement;
@@ -125,7 +140,7 @@ body {
       if (screen.orientation && screen.orientation.lock) {
         return screen.orientation.lock('landscape').catch(function() {});
       }
-    }).catch(function() {});
+    }).catch(function() {}).then(bumpResize);
   }, { once: true });
 })();
 </script>
