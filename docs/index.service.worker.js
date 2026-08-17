@@ -4,7 +4,7 @@
 // Incrementing CACHE_VERSION will kick off the install event and force
 // previously cached resources to be updated from the network.
 /** @type {string} */
-const CACHE_VERSION = '1786989475|3559006';
+const CACHE_VERSION = '1786989986|3545413';
 /** @type {string} */
 const CACHE_PREFIX = 'Lotan Clicker 2.-sw-cache-';
 const CACHE_NAME = CACHE_PREFIX + CACHE_VERSION;

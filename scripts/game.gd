@@ -1078,7 +1078,15 @@ func _on_back_button_pressed() -> void:
 
 func _on_exit_button_pressed() -> void:
 	sfx_player.play()
-	get_tree().quit()
+	if OS.has_feature("web"):
+		# A web page can't force-close its own tab/window (browser security
+		# restriction) — get_tree().quit() would just halt the engine loop
+		# and freeze the last frame instead. Best-effort close (works for an
+		# installed standalone PWA window in some browsers) and otherwise
+		# just leave the app running at the menu instead of freezing it.
+		JavaScriptBridge.eval("window.close();")
+	else:
+		get_tree().quit()
 
 
 func _on_lotan_button_pressed() -> void:
