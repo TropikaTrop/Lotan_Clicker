@@ -18,6 +18,10 @@ config/name="Lotan Clicker 2.0"
 run/main_scene="res://scenes/Lotan.tscn"
 config/features=PackedStringArray("4.6", "Forward Plus")
 
+[rendering]
+
+environment/defaults/default_clear_color=Color(0, 0.68942004, 0.666605, 1)
+
 [display]
 
 window/size/viewport_width=1920
