@@ -1920,7 +1920,8 @@ func _build_page_buttons() -> void:
 	var upg_next := Button.new()
 	upg_next.name = "UpgradePageBtn"
 	upg_next.text = "Next Page >"
-	upg_next.position = Vector2(135 , 635)
+	upg_next.position = Vector2(108, 618)
+	upg_next.custom_minimum_size = Vector2(160, 56)
 	upg_next.add_theme_font_override("font", $Main_Menu/NewGameButton.get_theme_font("font"))
 	upg_next.add_theme_font_size_override("font_size", 16)
 	upg_next.add_theme_color_override("font_color", Color(1, 1, 1))
@@ -1936,7 +1937,8 @@ func _build_page_buttons() -> void:
 	var shop_next := Button.new()
 	shop_next.name = "ShopPageBtn"
 	shop_next.text = "Next Page >"
-	shop_next.position = Vector2(135 , 635)
+	shop_next.position = Vector2(108, 618)
+	shop_next.custom_minimum_size = Vector2(160, 56)
 	shop_next.add_theme_font_override("font", $Main_Menu/NewGameButton.get_theme_font("font"))
 	shop_next.add_theme_font_size_override("font_size", 16)
 	shop_next.add_theme_color_override("font_color", Color(1, 1, 1))
