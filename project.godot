@@ -17,6 +17,7 @@ compatibility/default_parent_skeleton_in_mesh_instance_3d=true
 config/name="Lotan Clicker 2.0"
 run/main_scene="res://scenes/Lotan.tscn"
 config/features=PackedStringArray("4.6", "Forward Plus")
+config/icon="res://icons/icon_lotan.png"
 
 [rendering]
 
