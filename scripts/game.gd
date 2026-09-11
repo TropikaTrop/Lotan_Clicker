@@ -88,19 +88,21 @@ var shop7_bought = 0
 # =================================================
 const UPGRADE_PAGE2 = [
 	{ "name": "Tzipi Baron",       "cost": 2000000,    "lps": 5000.0,    "icon": "res://icons/tzipi baron.png",        "icon_black": "res://icons/tzipi baron black.png" },
-	{ "name": "Ultra Moodi",       "cost": 10000000,   "lps": 20000.0,   "icon": "res://icons/ultra moodi.png",        "icon_black": "res://icons/ultra moodi black.png" },
-	{ "name": "Ultra Sveta",       "cost": 50000000,   "lps": 100000.0,  "icon": "res://icons/ultra sveta.png",        "icon_black": "res://icons/ultra sveta black.png" },
-	{ "name": "Ultra Lotan",       "cost": 250000000,  "lps": 500000.0,  "icon": "res://icons/ultra lotan.png",        "icon_black": "res://icons/ultra lotan black.png" },
-	{ "name": "The Fantastic Four","cost": 1000000000, "lps": 2500000.0, "icon": "res://icons/the fantastic four.png", "icon_black": "res://icons/the fantastic four black.png" },
+	{ "name": "Yossef G",          "cost": 4500000,    "lps": 11000.0,   "icon": "res://icons/yossef g.png",           "icon_black": "res://icons/yossef g black.png" },
+	{ "name": "Ultra Moodi",       "cost": 15000000,   "lps": 30000.0,   "icon": "res://icons/ultra moodi.png",        "icon_black": "res://icons/ultra moodi black.png" },
+	{ "name": "Ultra Sveta",       "cost": 75000000,   "lps": 150000.0,  "icon": "res://icons/ultra sveta.png",        "icon_black": "res://icons/ultra sveta black.png" },
+	{ "name": "Ultra Lotan",       "cost": 375000000,  "lps": 750000.0,  "icon": "res://icons/ultra lotan.png",        "icon_black": "res://icons/ultra lotan black.png" },
+	{ "name": "The Fantastic Four","cost": 1500000000, "lps": 3750000.0, "icon": "res://icons/the fantastic four.png", "icon_black": "res://icons/the fantastic four black.png" },
 ]
 
 const SHOP_PAGE2 = [
-	{ "name": "Golden Diker",     "cost": 15000,      "effect": "golden_half", "amount": 0.5,   "icon": "res://icons/Lotan Golden cookie.png", "desc": "Golden Diker spawns faster" },
-	{ "name": "Barone",           "cost": 50000000,   "effect": "double_p2",   "amount": 0.0,   "icon": "res://icons/barone_upgrade.png",       "desc": "Tzipi Baron is doubled",    "target": 0 },
-	{ "name": "Narendra Moodi",   "cost": 250000000,  "effect": "double_p2",   "amount": 0.0,   "icon": "res://icons/Narendra Modi.png",        "desc": "Ultra Moodi is doubled",    "target": 1 },
-	{ "name": "Gloves",           "cost": 1000000000, "effect": "double_p2",   "amount": 0.0,   "icon": "res://icons/glove_upgrade.png",        "desc": "Ultra Sveta is doubled",    "target": 2 },
-	{ "name": "KKK & Jews",       "cost": 5000000000, "effect": "double_p2",   "amount": 0.0,   "icon": "res://icons/kkk.png",                  "desc": "Ultra Lotan is doubled",    "target": 3 },
-	{ "name": "The Golden Squad", "cost": 10000000000,"effect": "double_p2",   "amount": 0.0,   "icon": "res://icons/fantastic_four_upgrade.png","desc": "Fantastic Four is doubled", "target": 4 },
+	{ "name": "Golden Diker",     "cost": 15000,       "effect": "golden_half", "amount": 0.5,   "icon": "res://icons/Lotan Golden cookie.png", "desc": "Golden Diker spawns faster" },
+	{ "name": "Barone",           "cost": 50000000,    "effect": "double_p2",   "amount": 0.0,   "icon": "res://icons/barone_upgrade.png",       "desc": "Tzipi Baron is doubled",    "target": 0 },
+	{ "name": "Svetlana Kugen",   "cost": 120000000,   "effect": "double_p2",   "amount": 0.0,   "icon": "res://icons/svetlana kugen.png",       "desc": "Yossef G is doubled",       "target": 1 },
+	{ "name": "Narendra Moodi",   "cost": 250000000,   "effect": "double_p2",   "amount": 0.0,   "icon": "res://icons/Narendra Modi.png",        "desc": "Ultra Moodi is doubled",    "target": 2 },
+	{ "name": "Gloves",           "cost": 1000000000,  "effect": "double_p2",   "amount": 0.0,   "icon": "res://icons/glove_upgrade.png",        "desc": "Ultra Sveta is doubled",    "target": 3 },
+	{ "name": "KKK & Jews",       "cost": 5000000000,  "effect": "double_p2",   "amount": 0.0,   "icon": "res://icons/kkk.png",                  "desc": "Ultra Lotan is doubled",    "target": 4 },
+	{ "name": "The Golden Squad", "cost": 10000000000, "effect": "double_p2",   "amount": 0.0,   "icon": "res://icons/fantastic_four_upgrade.png","desc": "Fantastic Four is doubled", "target": 5 },
 ]
 
 # Page 2 runtime state
@@ -577,6 +579,15 @@ func load_data(slot: int) -> void:
 		upgrade_page2_levels = data.get("upgrade_page2_levels", [])
 		shop_page2_bought = data.get("shop_page2_bought", [])
 		golden_cookie_time_multiplier = data.get("golden_cookie_time_multiplier", 1.0)
+		# Migration: Yossef G / Svetlana Kugen insertion. Old saves have
+		# upgrade_page2_costs/levels at length 5 and shop_page2_bought at
+		# length 6 — insert the new entries' defaults at their correct
+		# position instead of letting everything after them shift.
+		if upgrade_page2_costs.size() == 5:
+			upgrade_page2_costs.insert(1, UPGRADE_PAGE2[1]["cost"])
+			upgrade_page2_levels.insert(1, 0)
+		if shop_page2_bought.size() == 6:
+			shop_page2_bought.insert(2, 0)
 		# Fill defaults if arrays are wrong size
 		while upgrade_page2_costs.size() < UPGRADE_PAGE2.size():
 			upgrade_page2_costs.append(UPGRADE_PAGE2[upgrade_page2_costs.size()]["cost"])
@@ -1589,12 +1600,14 @@ func _check_achievements() -> void:
 	if upgrade4_level >= 5: _unlock_achievement("upgrade_sergei")
 	if upgrade5_level >= 5: _unlock_achievement("upgrade_sveta")
 	if upgrade6_level >= 5: _unlock_achievement("upgrade_slim_lotan")
+	# NOTE: indices match UPGRADE_PAGE2's current order — Tzipi Baron(0),
+	# Yossef G(1), Ultra Moodi(2), Ultra Sveta(3), Ultra Lotan(4), Fantastic Four(5).
 	if upgrade_page2_levels[0] >= 5: _unlock_achievement("upgrade_tzipi")
-	if upgrade_page2_levels[1] >= 5: _unlock_achievement("upgrade_ultra_moodi")
-	if upgrade_page2_levels[2] >= 5: _unlock_achievement("upgrade_ultra_sveta")
-	if upgrade_page2_levels[3] >= 5: _unlock_achievement("upgrade_ultra_lotan")
-	if upgrade_page2_levels[4] >= 5: _unlock_achievement("upgrade_fantastic")
-	if upgrade_page2_levels[0] >= 1 and upgrade_page2_levels[1] >= 1 and upgrade_page2_levels[2] >= 1 and upgrade_page2_levels[3] >= 1 and upgrade_page2_levels[4] >= 1:
+	if upgrade_page2_levels[2] >= 5: _unlock_achievement("upgrade_ultra_moodi")
+	if upgrade_page2_levels[3] >= 5: _unlock_achievement("upgrade_ultra_sveta")
+	if upgrade_page2_levels[4] >= 5: _unlock_achievement("upgrade_ultra_lotan")
+	if upgrade_page2_levels[5] >= 5: _unlock_achievement("upgrade_fantastic")
+	if upgrade_page2_levels[0] >= 1 and upgrade_page2_levels[1] >= 1 and upgrade_page2_levels[2] >= 1 and upgrade_page2_levels[3] >= 1 and upgrade_page2_levels[4] >= 1 and upgrade_page2_levels[5] >= 1:
 		_unlock_achievement("upgrade_all_p2")
 	# Shop
 	if shop1_bought + shop2_bought + shop3_bought + shop4_bought + shop5_bought + shop6_bought + shop7_bought >= 1:
@@ -1966,9 +1979,9 @@ func _build_page_buttons() -> void:
 		btn.name = "UpgradeP2_" + str(i)
 		btn.custom_minimum_size = Vector2(278, 70)
 		btn.offset_left = 52.0
-		btn.offset_top = 20.0 + i * 120
+		btn.offset_top = 20.0 + i * 100
 		btn.offset_right = 330.0
-		btn.offset_bottom = 100.0 + i * 120
+		btn.offset_bottom = 100.0 + i * 100
 		btn.theme = $Main_Menu/NewGameButton.theme
 		btn.add_theme_color_override("font_color", Color(1, 1, 1))
 		btn.add_theme_font_override("font", $Main_Menu/NewGameButton.get_theme_font("font"))
@@ -1983,9 +1996,9 @@ func _build_page_buttons() -> void:
 		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		icon.offset_left = 5.0
-		icon.offset_top = 20.0 + i * 120
+		icon.offset_top = 20.0 + i * 100
 		icon.offset_right = 55.0
-		icon.offset_bottom = 100.0 + i * 120
+		icon.offset_bottom = 100.0 + i * 100
 		icon.visible = false
 		$rightPanel/Upgrades.add_child(icon)
 
@@ -2008,9 +2021,9 @@ func _build_page_buttons() -> void:
 		btn.name = "ShopP2_" + str(i)
 		btn.custom_minimum_size = Vector2(278, 70)
 		btn.offset_left = 52.0
-		btn.offset_top = 20.0 + i * 110
+		btn.offset_top = 20.0 + i * 85
 		btn.offset_right = 330.0
-		btn.offset_bottom = 100.0 + i * 110
+		btn.offset_bottom = 100.0 + i * 85
 		btn.theme = $Main_Menu/NewGameButton.theme
 		btn.add_theme_color_override("font_color", Color(1, 1, 1))
 		btn.add_theme_font_override("font", $Main_Menu/NewGameButton.get_theme_font("font"))
@@ -2030,8 +2043,8 @@ func _build_page_buttons() -> void:
 		else:
 			icon.offset_left = 5.0
 			icon.offset_right = 55.0
-		icon.offset_top = 20.0 + i * 110
-		icon.offset_bottom = 100.0 + i * 110
+		icon.offset_top = 20.0 + i * 85
+		icon.offset_bottom = 100.0 + i * 85
 		icon.visible = false
 		$rightPanel/Shops.add_child(icon)
 
