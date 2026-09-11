@@ -35,7 +35,15 @@ var play_time: float = 0.0
 var achievements_unlocked: Array = []
 var achievement_panel: Control = null
 var achievement_notification_queue: Array = []
-var achievement_notification_active: bool = false   
+var achievement_notification_active: bool = false
+
+# =================================================
+#              ASCENSION / PRESTIGE
+# =================================================
+var total_lotan_earned: float = 0.0   # lifetime cumulative, never reset
+var heavenly_chips: float = 0.0        # survives reset() and ascend_reset()
+var ascend_panel: Control = null
+const ASCEND_THRESHOLD: float = 1000000.0
 
 # ---- Upgrade 1 ----
 var upgrade1_cost: int = 15
@@ -88,19 +96,21 @@ var shop7_bought = 0
 # =================================================
 const UPGRADE_PAGE2 = [
 	{ "name": "Tzipi Baron",       "cost": 2000000,    "lps": 5000.0,    "icon": "res://icons/tzipi baron.png",        "icon_black": "res://icons/tzipi baron black.png" },
-	{ "name": "Ultra Moodi",       "cost": 10000000,   "lps": 20000.0,   "icon": "res://icons/ultra moodi.png",        "icon_black": "res://icons/ultra moodi black.png" },
-	{ "name": "Ultra Sveta",       "cost": 50000000,   "lps": 100000.0,  "icon": "res://icons/ultra sveta.png",        "icon_black": "res://icons/ultra sveta black.png" },
-	{ "name": "Ultra Lotan",       "cost": 250000000,  "lps": 500000.0,  "icon": "res://icons/ultra lotan.png",        "icon_black": "res://icons/ultra lotan black.png" },
-	{ "name": "The Fantastic Four","cost": 1000000000, "lps": 2500000.0, "icon": "res://icons/the fantastic four.png", "icon_black": "res://icons/the fantastic four black.png" },
+	{ "name": "Yossef G",          "cost": 4500000,    "lps": 11000.0,   "icon": "res://icons/yossef g.png",           "icon_black": "res://icons/yossef g black.png" },
+	{ "name": "Ultra Moodi",       "cost": 15000000,   "lps": 30000.0,   "icon": "res://icons/ultra moodi.png",        "icon_black": "res://icons/ultra moodi black.png" },
+	{ "name": "Ultra Sveta",       "cost": 75000000,   "lps": 150000.0,  "icon": "res://icons/ultra sveta.png",        "icon_black": "res://icons/ultra sveta black.png" },
+	{ "name": "Ultra Lotan",       "cost": 375000000,  "lps": 750000.0,  "icon": "res://icons/ultra lotan.png",        "icon_black": "res://icons/ultra lotan black.png" },
+	{ "name": "The Fantastic Four","cost": 1500000000, "lps": 3750000.0, "icon": "res://icons/the fantastic four.png", "icon_black": "res://icons/the fantastic four black.png" },
 ]
 
 const SHOP_PAGE2 = [
-	{ "name": "Golden Diker",     "cost": 15000,      "effect": "golden_half", "amount": 0.5,   "icon": "res://icons/Lotan Golden cookie.png", "desc": "Golden Diker spawns faster" },
-	{ "name": "Barone",           "cost": 50000000,   "effect": "double_p2",   "amount": 0.0,   "icon": "res://icons/barone_upgrade.png",       "desc": "Tzipi Baron is doubled",    "target": 0 },
-	{ "name": "Narendra Moodi",   "cost": 250000000,  "effect": "double_p2",   "amount": 0.0,   "icon": "res://icons/Narendra Modi.png",        "desc": "Ultra Moodi is doubled",    "target": 1 },
-	{ "name": "Gloves",           "cost": 1000000000, "effect": "double_p2",   "amount": 0.0,   "icon": "res://icons/glove_upgrade.png",        "desc": "Ultra Sveta is doubled",    "target": 2 },
-	{ "name": "KKK & Jews",       "cost": 5000000000, "effect": "double_p2",   "amount": 0.0,   "icon": "res://icons/kkk.png",                  "desc": "Ultra Lotan is doubled",    "target": 3 },
-	{ "name": "The Golden Squad", "cost": 10000000000,"effect": "double_p2",   "amount": 0.0,   "icon": "res://icons/fantastic_four_upgrade.png","desc": "Fantastic Four is doubled", "target": 4 },
+	{ "name": "Golden Diker",     "cost": 15000,       "effect": "golden_half", "amount": 0.5,   "icon": "res://icons/Lotan Golden cookie.png", "desc": "Golden Diker spawns faster" },
+	{ "name": "Barone",           "cost": 50000000,    "effect": "double_p2",   "amount": 0.0,   "icon": "res://icons/barone_upgrade.png",       "desc": "Tzipi Baron is doubled",    "target": 0 },
+	{ "name": "Svetlana Kugen",   "cost": 120000000,   "effect": "double_p2",   "amount": 0.0,   "icon": "res://icons/svetlana kugen.png",       "desc": "Yossef G is doubled",       "target": 1 },
+	{ "name": "Narendra Moodi",   "cost": 250000000,   "effect": "double_p2",   "amount": 0.0,   "icon": "res://icons/Narendra Modi.png",        "desc": "Ultra Moodi is doubled",    "target": 2 },
+	{ "name": "Gloves",           "cost": 1000000000,  "effect": "double_p2",   "amount": 0.0,   "icon": "res://icons/glove_upgrade.png",        "desc": "Ultra Sveta is doubled",    "target": 3 },
+	{ "name": "KKK & Jews",       "cost": 5000000000,  "effect": "double_p2",   "amount": 0.0,   "icon": "res://icons/kkk.png",                  "desc": "Ultra Lotan is doubled",    "target": 4 },
+	{ "name": "The Golden Squad", "cost": 10000000000, "effect": "double_p2",   "amount": 0.0,   "icon": "res://icons/fantastic_four_upgrade.png","desc": "Fantastic Four is doubled", "target": 5 },
 ]
 
 # Page 2 runtime state
@@ -148,6 +158,11 @@ func _ready() -> void:
 	# ---- Achievement setup ----
 	_build_achievement_panel()
 	_build_achievement_button()
+
+	# ---- Ascension setup ----
+	_build_ascend_panel()
+	_build_ascend_button()
+	_build_heavenly_chips_label()
 
 	# ---- Page 2 init ----
 	for i in range(UPGRADE_PAGE2.size()):
@@ -234,6 +249,7 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	lotan += lps * delta
+	total_lotan_earned += lps * delta
 	if in_game:
 		play_time += delta
 		_check_achievements()
@@ -277,6 +293,12 @@ func update_ui() -> void:
 	else:
 		$leftPanel/MarginContainer/Stats/Lotans.text = "Svetas: " + str(int(lotan))
 		$leftPanel/MarginContainer/Stats/LPS.text = "Svetas per second: " + str(lps)
+
+	var hc_label = $leftPanel/MarginContainer/Stats.get_node_or_null("HeavenlyChipsLabel")
+	if hc_label:
+		hc_label.visible = heavenly_chips > 0
+		hc_label.text = "Heavenly Chips: " + str(int(heavenly_chips))
+	_update_ascend_button_visibility()
 
 	# ---- Upgrade 1 Button ----
 
@@ -519,7 +541,9 @@ func save_data() -> void:
 		"upgrade_page2_costs": upgrade_page2_costs,
 		"upgrade_page2_levels": upgrade_page2_levels,
 		"shop_page2_bought": shop_page2_bought,
-		"golden_cookie_time_multiplier": golden_cookie_time_multiplier
+		"golden_cookie_time_multiplier": golden_cookie_time_multiplier,
+		"heavenly_chips": heavenly_chips,
+		"total_lotan_earned": total_lotan_earned
 	}
 
 	var file = FileAccess.open(SAVE_SLOTS[active_slot], FileAccess.WRITE)
@@ -577,6 +601,17 @@ func load_data(slot: int) -> void:
 		upgrade_page2_levels = data.get("upgrade_page2_levels", [])
 		shop_page2_bought = data.get("shop_page2_bought", [])
 		golden_cookie_time_multiplier = data.get("golden_cookie_time_multiplier", 1.0)
+		heavenly_chips = float(data.get("heavenly_chips", 0.0))
+		total_lotan_earned = float(data.get("total_lotan_earned", 0.0))
+		# Migration: Yossef G / Svetlana Kugen insertion. Old saves have
+		# upgrade_page2_costs/levels at length 5 and shop_page2_bought at
+		# length 6 — insert the new entries' defaults at their correct
+		# position instead of letting everything after them shift.
+		if upgrade_page2_costs.size() == 5:
+			upgrade_page2_costs.insert(1, UPGRADE_PAGE2[1]["cost"])
+			upgrade_page2_levels.insert(1, 0)
+		if shop_page2_bought.size() == 6:
+			shop_page2_bought.insert(2, 0)
 		# Fill defaults if arrays are wrong size
 		while upgrade_page2_costs.size() < UPGRADE_PAGE2.size():
 			upgrade_page2_costs.append(UPGRADE_PAGE2[upgrade_page2_costs.size()]["cost"])
@@ -593,6 +628,7 @@ func load_data(slot: int) -> void:
 		if time_passed > 0:
 			var offline_gain = lps * time_passed *0.01
 			lotan += offline_gain
+			total_lotan_earned += offline_gain
 			print("Gained ", offline_gain, " Lotans while offline!")
 	else:
 		# corrupted save → rewrite
@@ -604,6 +640,7 @@ func load_data(slot: int) -> void:
 # =================================================
 func _on_click_button_button_down() -> void:
 	lotan += amount_per_click
+	total_lotan_earned += amount_per_click
 	total_clicks += 1
 	emit_signal("lotan_change", lotan)
 	emit_signal("lotan_clicked", amount_per_click)
@@ -1966,9 +2003,9 @@ func _build_page_buttons() -> void:
 		btn.name = "UpgradeP2_" + str(i)
 		btn.custom_minimum_size = Vector2(278, 70)
 		btn.offset_left = 52.0
-		btn.offset_top = 20.0 + i * 120
+		btn.offset_top = 20.0 + i * 100
 		btn.offset_right = 330.0
-		btn.offset_bottom = 100.0 + i * 120
+		btn.offset_bottom = 100.0 + i * 100
 		btn.theme = $Main_Menu/NewGameButton.theme
 		btn.add_theme_color_override("font_color", Color(1, 1, 1))
 		btn.add_theme_font_override("font", $Main_Menu/NewGameButton.get_theme_font("font"))
@@ -1983,9 +2020,9 @@ func _build_page_buttons() -> void:
 		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		icon.offset_left = 5.0
-		icon.offset_top = 20.0 + i * 120
+		icon.offset_top = 20.0 + i * 100
 		icon.offset_right = 55.0
-		icon.offset_bottom = 100.0 + i * 120
+		icon.offset_bottom = 100.0 + i * 100
 		icon.visible = false
 		$rightPanel/Upgrades.add_child(icon)
 
@@ -2008,9 +2045,9 @@ func _build_page_buttons() -> void:
 		btn.name = "ShopP2_" + str(i)
 		btn.custom_minimum_size = Vector2(278, 70)
 		btn.offset_left = 52.0
-		btn.offset_top = 20.0 + i * 110
+		btn.offset_top = 20.0 + i * 85
 		btn.offset_right = 330.0
-		btn.offset_bottom = 100.0 + i * 110
+		btn.offset_bottom = 100.0 + i * 85
 		btn.theme = $Main_Menu/NewGameButton.theme
 		btn.add_theme_color_override("font_color", Color(1, 1, 1))
 		btn.add_theme_font_override("font", $Main_Menu/NewGameButton.get_theme_font("font"))
@@ -2030,8 +2067,8 @@ func _build_page_buttons() -> void:
 		else:
 			icon.offset_left = 5.0
 			icon.offset_right = 55.0
-		icon.offset_top = 20.0 + i * 110
-		icon.offset_bottom = 100.0 + i * 110
+		icon.offset_top = 20.0 + i * 85
+		icon.offset_bottom = 100.0 + i * 85
 		icon.visible = false
 		$rightPanel/Shops.add_child(icon)
 
@@ -2174,7 +2211,218 @@ func _on_shop_p2_pressed(i: int) -> void:
 	elif data["effect"] == "double_p2":
 		# Double the LPS contribution of the target page 2 upgrade
 		var target = data["target"]
-		var lvl = upgrade_page2_levels[target]	
+		var lvl = upgrade_page2_levels[target]
 		lps += UPGRADE_PAGE2[target]["lps"] * lvl
 	save_data()
-	_update_shop_p2_ui()	
+	_update_shop_p2_ui()
+
+
+# =================================================
+#              ASCENSION / PRESTIGE
+# =================================================
+func _build_ascend_button() -> void:
+	if $Main_Menu.get_node_or_null("AscendButton") != null:
+		return
+	var btn := TextureButton.new()
+	btn.name = "AscendButton"
+	btn.texture_normal = preload("res://icons/icon_lotan.png")
+	btn.scale = Vector2(2.5, 2.0)
+	# Place it next to the achievement/trophy button (which is at 80, 580)
+	btn.position = Vector2(170, 580)
+	btn.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	btn.visible = false
+	btn.pressed.connect(_on_ascend_button_pressed)
+	$Main_Menu.add_child(btn)
+
+
+func _update_ascend_button_visibility() -> void:
+	var btn = $Main_Menu.get_node_or_null("AscendButton")
+	if btn:
+		btn.visible = total_lotan_earned >= ASCEND_THRESHOLD
+
+
+func _on_ascend_button_pressed() -> void:
+	sfx_player.play()
+	_refresh_ascend_panel()
+	ascend_panel.show()
+
+
+func _build_ascend_panel() -> void:
+	if ascend_panel != null:
+		return
+	ascend_panel = PanelContainer.new()
+	ascend_panel.name = "AscendPanel"
+	ascend_panel.z_index = 200
+	ascend_panel.anchor_left = 0.0
+	ascend_panel.anchor_top = 0.0
+	ascend_panel.anchor_right = 1.0
+	ascend_panel.anchor_bottom = 1.0
+	ascend_panel.offset_left = 0
+	ascend_panel.offset_top = 0
+	ascend_panel.offset_right = 0
+	ascend_panel.offset_bottom = 0
+	ascend_panel.hide()
+
+	# Match the teal game style
+	var bg := StyleBoxFlat.new()
+	bg.bg_color = Color(0.0, 0.53, 0.53)
+	bg.corner_radius_top_left = 12
+	bg.corner_radius_top_right = 12
+	bg.corner_radius_bottom_left = 12
+	bg.corner_radius_bottom_right = 12
+	ascend_panel.add_theme_stylebox_override("panel", bg)
+
+	var margin := MarginContainer.new()
+	margin.name = "AscendMargin"
+	margin.add_theme_constant_override("margin_top", 16)
+	margin.add_theme_constant_override("margin_bottom", 16)
+	margin.add_theme_constant_override("margin_left", 16)
+	margin.add_theme_constant_override("margin_right", 16)
+	ascend_panel.add_child(margin)
+
+	var vbox := VBoxContainer.new()
+	vbox.name = "AscendVBox"
+	vbox.add_theme_constant_override("separation", 8)
+	margin.add_child(vbox)
+
+	var title := Label.new()
+	title.text = "Ascend"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_override("font", $Main_Menu/NewGameButton.get_theme_font("font"))
+	title.add_theme_font_size_override("font_size", 42)
+	title.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	vbox.add_child(title)
+
+	var info := Label.new()
+	info.name = "AscendInfoLabel"
+	info.text = ""
+	info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	info.autowrap_mode = TextServer.AUTOWRAP_WORD
+	info.add_theme_font_override("font", $Main_Menu/NewGameButton.get_theme_font("font"))
+	info.add_theme_font_size_override("font_size", 24)
+	info.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	vbox.add_child(info)
+
+	var ref = $Main_Menu/NewGameButton
+	var buttons := HBoxContainer.new()
+	buttons.add_theme_constant_override("separation", 16)
+	vbox.add_child(buttons)
+
+	var confirm_btn := Button.new()
+	confirm_btn.text = "Reincarnate"
+	confirm_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	confirm_btn.custom_minimum_size = Vector2(0, 70)
+	if ref.has_theme_font("font"):
+		confirm_btn.add_theme_font_override("font", ref.get_theme_font("font"))
+	confirm_btn.add_theme_font_size_override("font_size", 22)
+	confirm_btn.theme = ref.theme
+	if ref.has_theme_stylebox("normal"):
+		confirm_btn.add_theme_stylebox_override("normal", ref.get_theme_stylebox("normal"))
+	if ref.has_theme_stylebox("hover"):
+		confirm_btn.add_theme_stylebox_override("hover", ref.get_theme_stylebox("hover"))
+	if ref.has_theme_stylebox("pressed"):
+		confirm_btn.add_theme_stylebox_override("pressed", ref.get_theme_stylebox("pressed"))
+	confirm_btn.add_theme_color_override("font_color", Color(0, 0, 0))
+	confirm_btn.pressed.connect(_on_ascend_confirm_pressed)
+	buttons.add_child(confirm_btn)
+
+	var cancel_btn := Button.new()
+	cancel_btn.text = "Cancel"
+	cancel_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	cancel_btn.custom_minimum_size = Vector2(0, 70)
+	if ref.has_theme_font("font"):
+		cancel_btn.add_theme_font_override("font", ref.get_theme_font("font"))
+	cancel_btn.add_theme_font_size_override("font_size", 22)
+	cancel_btn.theme = ref.theme
+	if ref.has_theme_stylebox("normal"):
+		cancel_btn.add_theme_stylebox_override("normal", ref.get_theme_stylebox("normal"))
+	if ref.has_theme_stylebox("hover"):
+		cancel_btn.add_theme_stylebox_override("hover", ref.get_theme_stylebox("hover"))
+	if ref.has_theme_stylebox("pressed"):
+		cancel_btn.add_theme_stylebox_override("pressed", ref.get_theme_stylebox("pressed"))
+	cancel_btn.add_theme_color_override("font_color", Color(0, 0, 0))
+	cancel_btn.pressed.connect(_on_ascend_cancel_pressed)
+	buttons.add_child(cancel_btn)
+
+	var canvas := CanvasLayer.new()
+	canvas.name = "AscendCanvas"
+	add_child(canvas)
+	canvas.add_child(ascend_panel)
+
+
+func _refresh_ascend_panel() -> void:
+	var gain = _calculate_heavenly_chips_gain()
+	var info = ascend_panel.get_node_or_null("AscendMargin/AscendVBox/AscendInfoLabel")
+	if info:
+		info.text = "Ascending resets your Lotans, LPS, and all upgrades.\n\nLifetime earned: " + _format_number(int(total_lotan_earned)) + "\nYou will gain: " + str(int(gain)) + " Heavenly Chips"
+
+
+func _calculate_heavenly_chips_gain() -> float:
+	return floor(sqrt(total_lotan_earned / 1000000.0))
+
+
+func _on_ascend_confirm_pressed() -> void:
+	sfx_player.play()
+	heavenly_chips += _calculate_heavenly_chips_gain()
+	ascend_reset()
+	ascend_panel.hide()
+	save_data()
+	update_ui()
+	show_upgrades()
+
+
+func _on_ascend_cancel_pressed() -> void:
+	sfx_player.play()
+	ascend_panel.hide()
+
+
+func ascend_reset() -> void:
+	# Same as reset(), except it PRESERVES: total_clicks, play_time,
+	# achievements_unlocked, lotan_skin, heavenly_chips, total_lotan_earned.
+	lotan = 0
+	amount_per_click = 1
+	lps = 0.0
+	upgrade1_cost=15
+	upgrade1_level =0
+	upgrade2_cost=125
+	upgrade2_level =0
+	upgrade3_cost=1000
+	upgrade3_level =0
+	upgrade4_cost=25000
+	upgrade4_level =0
+	upgrade5_cost=140000
+	upgrade5_level =0
+	upgrade6_cost=1000000
+	upgrade6_level =0
+	shop1_bought=0
+	shop2_bought=0
+	shop3_bought=0
+	shop4_bought=0
+	shop5_bought=0
+	shop6_bought=0
+	shop7_bought=0
+	shop7_cost=100
+	golden_cookies_clicked = 0
+	upgrade_page2_costs = []
+	upgrade_page2_levels = []
+	shop_page2_bought = []
+	golden_cookie_time_multiplier = 1.0
+	for i in range(UPGRADE_PAGE2.size()):
+		upgrade_page2_costs.append(UPGRADE_PAGE2[i]["cost"])
+		upgrade_page2_levels.append(0)
+	for i in range(SHOP_PAGE2.size()):
+		shop_page2_bought.append(0)
+	_cancel_golden_cookie_buff()
+
+
+func _build_heavenly_chips_label() -> void:
+	if $leftPanel/MarginContainer/Stats.get_node_or_null("HeavenlyChipsLabel") != null:
+		return
+	var label := Label.new()
+	label.name = "HeavenlyChipsLabel"
+	label.text = "Heavenly Chips: 0"
+	label.visible = false
+	label.add_theme_font_override("font", $leftPanel/MarginContainer/Stats/Lotans.get_theme_font("font"))
+	label.add_theme_font_size_override("font_size", 22)
+	label.add_theme_constant_override("outline_size", 10)
+	$leftPanel/MarginContainer/Stats.add_child(label)
