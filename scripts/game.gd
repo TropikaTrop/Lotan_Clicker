@@ -41,9 +41,22 @@ var achievement_notification_active: bool = false
 #              ASCENSION / PRESTIGE
 # =================================================
 var total_lotan_earned: float = 0.0   # lifetime cumulative, never reset
-var heavenly_chips: float = 0.0        # survives reset() and ascend_reset()
+var svet_tokens: float = 0.0           # survives reset() and ascend_reset()
+var ascend_count: int = 0              # lifetime ascend count, never reset
 var ascend_panel: Control = null
+var ascend_button_group: Control = null
 const ASCEND_THRESHOLD: float = 1000000.0
+
+# Permanent upgrades bought with Svet Tokens. Each level is a flat % bonus
+# that applies forever, on top of whatever the current run's lps/click is —
+# these never get cleared by reset() or ascend_reset().
+const SVET_UPGRADES = [
+	{ "name": "Svet's Blessing", "base_cost": 5,  "effect": "lps_percent",     "amount": 0.02, "icon": "res://icons/star of david.png",       "desc": "+2% Lotans per second, per level" },
+	{ "name": "Svet's Grace",    "base_cost": 5,  "effect": "click_percent",   "amount": 0.02, "icon": "res://icons/glasses.png",              "desc": "+2% Lotans per click, per level" },
+	{ "name": "Svet's Patience", "base_cost": 8,  "effect": "golden_speed",    "amount": 0.05, "icon": "res://icons/Lotan Golden cookie.png",  "desc": "-5% Golden Diker wait time, per level" },
+	{ "name": "Svet's Windfall", "base_cost": 8,  "effect": "offline_percent", "amount": 0.05, "icon": "res://icons/kefir.png",                "desc": "+5% offline earnings, per level" },
+]
+var svet_upgrade_levels: Array = []
 
 # ---- Upgrade 1 ----
 var upgrade1_cost: int = 15
@@ -162,7 +175,9 @@ func _ready() -> void:
 	# ---- Ascension setup ----
 	_build_ascend_panel()
 	_build_ascend_button()
-	_build_heavenly_chips_label()
+	_build_svet_tokens_label()
+	for i in range(SVET_UPGRADES.size()):
+		svet_upgrade_levels.append(0)
 
 	# ---- Page 2 init ----
 	for i in range(UPGRADE_PAGE2.size()):
@@ -247,9 +262,28 @@ func _ready() -> void:
 	#add_child(debug_reset_btn)
 
 
+func _get_svet_lps_multiplier() -> float:
+	return 1.0 + svet_upgrade_levels[0] * SVET_UPGRADES[0]["amount"]
+
+
+func _get_svet_click_multiplier() -> float:
+	return 1.0 + svet_upgrade_levels[1] * SVET_UPGRADES[1]["amount"]
+
+
+func _get_svet_golden_speed_multiplier() -> float:
+	# Reduces the golden cookie's spawn wait time; floor at 10% of normal
+	# so it can never spawn instantly/negatively.
+	return max(0.1, 1.0 - svet_upgrade_levels[2] * SVET_UPGRADES[2]["amount"])
+
+
+func _get_svet_offline_multiplier() -> float:
+	return 1.0 + svet_upgrade_levels[3] * SVET_UPGRADES[3]["amount"]
+
+
 func _process(delta: float) -> void:
-	lotan += lps * delta
-	total_lotan_earned += lps * delta
+	var gained = lps * delta * _get_svet_lps_multiplier()
+	lotan += gained
+	total_lotan_earned += gained
 	if in_game:
 		play_time += delta
 		_check_achievements()
@@ -294,10 +328,10 @@ func update_ui() -> void:
 		$leftPanel/MarginContainer/Stats/Lotans.text = "Svetas: " + str(int(lotan))
 		$leftPanel/MarginContainer/Stats/LPS.text = "Svetas per second: " + str(lps)
 
-	var hc_label = $leftPanel/MarginContainer/Stats.get_node_or_null("HeavenlyChipsLabel")
-	if hc_label:
-		hc_label.visible = heavenly_chips > 0
-		hc_label.text = "Heavenly Chips: " + str(int(heavenly_chips))
+	if ascend_button_group:
+		var st_label = ascend_button_group.get_node_or_null("AscendButtonVBox/SvetTokensLabel")
+		if st_label:
+			st_label.text = "Svet Tokens: " + str(int(svet_tokens))
 	_update_ascend_button_visibility()
 
 	# ---- Upgrade 1 Button ----
@@ -542,7 +576,9 @@ func save_data() -> void:
 		"upgrade_page2_levels": upgrade_page2_levels,
 		"shop_page2_bought": shop_page2_bought,
 		"golden_cookie_time_multiplier": golden_cookie_time_multiplier,
-		"heavenly_chips": heavenly_chips,
+		"svet_tokens": svet_tokens,
+		"svet_upgrade_levels": svet_upgrade_levels,
+		"ascend_count": ascend_count,
 		"total_lotan_earned": total_lotan_earned
 	}
 
@@ -601,7 +637,13 @@ func load_data(slot: int) -> void:
 		upgrade_page2_levels = data.get("upgrade_page2_levels", [])
 		shop_page2_bought = data.get("shop_page2_bought", [])
 		golden_cookie_time_multiplier = data.get("golden_cookie_time_multiplier", 1.0)
-		heavenly_chips = float(data.get("heavenly_chips", 0.0))
+		# "heavenly_chips" is the old key name (kept as a fallback so existing
+		# saved balances aren't lost by the Svet Tokens rename).
+		svet_tokens = float(data.get("svet_tokens", data.get("heavenly_chips", 0.0)))
+		svet_upgrade_levels = data.get("svet_upgrade_levels", [])
+		while svet_upgrade_levels.size() < SVET_UPGRADES.size():
+			svet_upgrade_levels.append(0)
+		ascend_count = int(data.get("ascend_count", 0))
 		total_lotan_earned = float(data.get("total_lotan_earned", 0.0))
 		# Migration: Yossef G / Svetlana Kugen insertion. Old saves have
 		# upgrade_page2_costs/levels at length 5 and shop_page2_bought at
@@ -626,7 +668,7 @@ func load_data(slot: int) -> void:
 		var last_played = data.get("last_played", Time.get_unix_time_from_system())
 		var time_passed = Time.get_unix_time_from_system() - last_played
 		if time_passed > 0:
-			var offline_gain = lps * time_passed *0.01
+			var offline_gain = lps * time_passed * 0.01 * _get_svet_lps_multiplier() * _get_svet_offline_multiplier()
 			lotan += offline_gain
 			total_lotan_earned += offline_gain
 			print("Gained ", offline_gain, " Lotans while offline!")
@@ -639,11 +681,12 @@ func load_data(slot: int) -> void:
 #                PLAYER INPUT
 # =================================================
 func _on_click_button_button_down() -> void:
-	lotan += amount_per_click
-	total_lotan_earned += amount_per_click
+	var click_gain = amount_per_click * _get_svet_click_multiplier()
+	lotan += click_gain
+	total_lotan_earned += click_gain
 	total_clicks += 1
 	emit_signal("lotan_change", lotan)
-	emit_signal("lotan_clicked", amount_per_click)
+	emit_signal("lotan_clicked", click_gain)
 	sfx_player.play()
 	save_data()
 	 
@@ -1093,7 +1136,9 @@ func _on_reset_button_pressed() -> void:
 	$Main_Menu/ExitButton.show()
 	$leftPanel.hide()
 	$rightPanel.hide()
- 	
+	if ascend_button_group:
+		ascend_button_group.hide()
+
 
 
 
@@ -1435,7 +1480,7 @@ func _on_golden_cookie_spawn_timer_timeout() -> void:
 	if golden_cookie_active:
 		return
 	# Randomize next spawn time between 4 and 5 minutes
-	$GoldenCookieSpawnTimer.wait_time = randf_range(240.0, 300.0) * golden_cookie_time_multiplier
+	$GoldenCookieSpawnTimer.wait_time = randf_range(240.0, 300.0) * golden_cookie_time_multiplier * _get_svet_golden_speed_multiplier()
 	_spawn_golden_cookie()
 
 
@@ -1576,6 +1621,7 @@ const ACHIEVEMENTS = [
 	{ "id": "upgrade_slim_lotan",  "name": "Slim Lotan Fan",    "desc": "Buy Slim Lotan 5 times",            "texture": "res://icons/slim_lotan.png" },
 	# --- Page 2 Upgrades ---
 	{ "id": "upgrade_tzipi",       "name": "Tzipi Baron Fan",   "desc": "Buy Tzipi Baron 5 times",           "texture": "res://icons/tzipi baron.png" },
+	{ "id": "upgrade_yossef",      "name": "Yossef G Fan",      "desc": "Buy Yossef G 5 times",              "texture": "res://icons/yossef g.png" },
 	{ "id": "upgrade_ultra_moodi", "name": "Ultra Moodi Fan",   "desc": "Buy Ultra Moodi 5 times",           "texture": "res://icons/ultra moodi.png" },
 	{ "id": "upgrade_ultra_sveta", "name": "Ultra Sveta Fan",   "desc": "Buy Ultra Sveta 5 times",           "texture": "res://icons/ultra sveta.png" },
 	{ "id": "upgrade_ultra_lotan", "name": "Ultra Lotan Fan",   "desc": "Buy Ultra Lotan 5 times",           "texture": "res://icons/ultra lotan.png" },
@@ -1584,9 +1630,12 @@ const ACHIEVEMENTS = [
 	# --- Shop ---
 	{ "id": "shop_first",     "name": "Secret Found",      "desc": "Buy your first secret upgrade",     "texture": "res://icons/moodle.png" },
 	{ "id": "shop_all",       "name": "Big Shopper",       "desc": "Buy all secret upgrades",           "texture": "res://icons/fantastic_four_upgrade.png" },
+	{ "id": "shop_svetlana",  "name": "Svetlana's Secret", "desc": "Buy Svetlana Kugen",                "texture": "res://icons/svetlana kugen.png" },
 	# --- Golden Diker ---
 	{ "id": "golden_first",   "name": "Golden Diker",      "desc": "Click your first Golden Diker",     "texture": "res://icons/Lotan Golden cookie.png" },
 	{ "id": "golden_5",       "name": "Golden Diker Fan",  "desc": "Click 5 Golden Dikers",             "texture": "res://icons/Lotan Golden cookie.png" },
+	# --- Ascension ---
+	{ "id": "ascend_first",   "name": "Reborn",            "desc": "Ascend for the first time",         "texture": "res://icons/icon_lotan.png" },
 ]
 
 var golden_cookies_clicked: int = 0
@@ -1626,21 +1675,28 @@ func _check_achievements() -> void:
 	if upgrade4_level >= 5: _unlock_achievement("upgrade_sergei")
 	if upgrade5_level >= 5: _unlock_achievement("upgrade_sveta")
 	if upgrade6_level >= 5: _unlock_achievement("upgrade_slim_lotan")
+	# NOTE: indices below match UPGRADE_PAGE2's current order — Tzipi Baron(0),
+	# Yossef G(1), Ultra Moodi(2), Ultra Sveta(3), Ultra Lotan(4), Fantastic Four(5).
 	if upgrade_page2_levels[0] >= 5: _unlock_achievement("upgrade_tzipi")
-	if upgrade_page2_levels[1] >= 5: _unlock_achievement("upgrade_ultra_moodi")
-	if upgrade_page2_levels[2] >= 5: _unlock_achievement("upgrade_ultra_sveta")
-	if upgrade_page2_levels[3] >= 5: _unlock_achievement("upgrade_ultra_lotan")
-	if upgrade_page2_levels[4] >= 5: _unlock_achievement("upgrade_fantastic")
-	if upgrade_page2_levels[0] >= 1 and upgrade_page2_levels[1] >= 1 and upgrade_page2_levels[2] >= 1 and upgrade_page2_levels[3] >= 1 and upgrade_page2_levels[4] >= 1:
+	if upgrade_page2_levels[1] >= 5: _unlock_achievement("upgrade_yossef")
+	if upgrade_page2_levels[2] >= 5: _unlock_achievement("upgrade_ultra_moodi")
+	if upgrade_page2_levels[3] >= 5: _unlock_achievement("upgrade_ultra_sveta")
+	if upgrade_page2_levels[4] >= 5: _unlock_achievement("upgrade_ultra_lotan")
+	if upgrade_page2_levels[5] >= 5: _unlock_achievement("upgrade_fantastic")
+	if upgrade_page2_levels[0] >= 1 and upgrade_page2_levels[1] >= 1 and upgrade_page2_levels[2] >= 1 and upgrade_page2_levels[3] >= 1 and upgrade_page2_levels[4] >= 1 and upgrade_page2_levels[5] >= 1:
 		_unlock_achievement("upgrade_all_p2")
 	# Shop
 	if shop1_bought + shop2_bought + shop3_bought + shop4_bought + shop5_bought + shop6_bought + shop7_bought >= 1:
 		_unlock_achievement("shop_first")
 	if shop1_bought >= 1 and shop2_bought >= 1 and shop3_bought >= 1 and shop4_bought >= 1 and shop5_bought >= 1 and shop6_bought >= 1:
 		_unlock_achievement("shop_all")
+	# Svetlana Kugen is SHOP_PAGE2 index 2
+	if shop_page2_bought[2] >= 1: _unlock_achievement("shop_svetlana")
 	# Golden cookie
 	if golden_cookies_clicked >= 1: _unlock_achievement("golden_first")
 	if golden_cookies_clicked >= 5: _unlock_achievement("golden_5")
+	# Ascension
+	if ascend_count >= 1: _unlock_achievement("ascend_first")
 
 
 # =================================================
@@ -2221,24 +2277,66 @@ func _on_shop_p2_pressed(i: int) -> void:
 #              ASCENSION / PRESTIGE
 # =================================================
 func _build_ascend_button() -> void:
-	if $Main_Menu.get_node_or_null("AscendButton") != null:
+	if ascend_button_group != null:
 		return
-	var btn := TextureButton.new()
+
+	# A small top-right-anchored group (in its own CanvasLayer so it sits in
+	# real screen space, pinned to the actual corner regardless of the
+	# window/stretch — the same pattern as ascend_panel/achievement_panel).
+	ascend_button_group = Control.new()
+	ascend_button_group.name = "AscendButtonGroup"
+	ascend_button_group.anchor_left = 1.0
+	ascend_button_group.anchor_top = 0.0
+	ascend_button_group.anchor_right = 1.0
+	ascend_button_group.anchor_bottom = 0.0
+	ascend_button_group.offset_left = -170.0
+	ascend_button_group.offset_top = 10.0
+	ascend_button_group.offset_right = -10.0
+	ascend_button_group.offset_bottom = 100.0
+	ascend_button_group.mouse_filter = Control.MOUSE_FILTER_PASS
+	ascend_button_group.visible = false
+
+	var vbox := VBoxContainer.new()
+	vbox.name = "AscendButtonVBox"
+	vbox.add_theme_constant_override("separation", 2)
+	vbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	ascend_button_group.add_child(vbox)
+
+	var btn := Button.new()
 	btn.name = "AscendButton"
-	btn.texture_normal = preload("res://icons/icon_lotan.png")
-	btn.scale = Vector2(2.5, 2.0)
-	# Place it next to the achievement/trophy button (which is at 80, 580)
-	btn.position = Vector2(170, 580)
-	btn.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	btn.visible = false
+	btn.text = "Ascend"
+	btn.custom_minimum_size = Vector2(160, 56)
+	btn.add_theme_font_override("font", $Main_Menu/NewGameButton.get_theme_font("font"))
+	btn.add_theme_font_size_override("font_size", 20)
+	btn.add_theme_color_override("font_color", Color(0, 0, 0))
+	var light_blue := StyleBoxFlat.new()
+	light_blue.bg_color = Color(0.55, 0.8, 0.96)
+	light_blue.corner_radius_top_left = 10
+	light_blue.corner_radius_top_right = 10
+	light_blue.corner_radius_bottom_left = 10
+	light_blue.corner_radius_bottom_right = 10
+	btn.add_theme_stylebox_override("normal", light_blue)
+	var light_blue_hover := light_blue.duplicate()
+	light_blue_hover.bg_color = Color(0.65, 0.87, 1.0)
+	btn.add_theme_stylebox_override("hover", light_blue_hover)
+	var light_blue_pressed := light_blue.duplicate()
+	light_blue_pressed.bg_color = Color(0.45, 0.7, 0.88)
+	btn.add_theme_stylebox_override("pressed", light_blue_pressed)
 	btn.pressed.connect(_on_ascend_button_pressed)
-	$Main_Menu.add_child(btn)
+	vbox.add_child(btn)
+
+	var canvas := CanvasLayer.new()
+	canvas.name = "AscendButtonCanvas"
+	add_child(canvas)
+	canvas.add_child(ascend_button_group)
 
 
 func _update_ascend_button_visibility() -> void:
-	var btn = $Main_Menu.get_node_or_null("AscendButton")
-	if btn:
-		btn.visible = total_lotan_earned >= ASCEND_THRESHOLD
+	if ascend_button_group:
+		# Visible only while actually playing (not on the main menu), and
+		# only once you can ascend, or any time after if you still have
+		# Svet Tokens saved up to spend on Heavenly Upgrades.
+		ascend_button_group.visible = in_game and (total_lotan_earned >= ASCEND_THRESHOLD or svet_tokens > 0)
 
 
 func _on_ascend_button_pressed() -> void:
@@ -2300,10 +2398,60 @@ func _build_ascend_panel() -> void:
 	info.autowrap_mode = TextServer.AUTOWRAP_WORD
 	info.add_theme_font_override("font", $Main_Menu/NewGameButton.get_theme_font("font"))
 	info.add_theme_font_size_override("font_size", 24)
-	info.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vbox.add_child(info)
 
 	var ref = $Main_Menu/NewGameButton
+
+	# ---- Heavenly Upgrades: spend Svet Tokens on permanent bonuses ----
+	var shop_header := Label.new()
+	shop_header.name = "SvetShopHeader"
+	shop_header.text = "Heavenly Upgrades"
+	shop_header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	shop_header.add_theme_font_override("font", ref.get_theme_font("font"))
+	shop_header.add_theme_font_size_override("font_size", 28)
+	vbox.add_child(shop_header)
+
+	var shop_vbox := VBoxContainer.new()
+	shop_vbox.name = "SvetShopVBox"
+	shop_vbox.add_theme_constant_override("separation", 8)
+	shop_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	vbox.add_child(shop_vbox)
+
+	for i in range(SVET_UPGRADES.size()):
+		var data = SVET_UPGRADES[i]
+		var row := HBoxContainer.new()
+		row.name = "SvetRow_" + str(i)
+		row.add_theme_constant_override("separation", 12)
+		shop_vbox.add_child(row)
+
+		var icon := TextureRect.new()
+		icon.name = "SvetIcon_" + str(i)
+		icon.texture = load(data["icon"])
+		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		icon.custom_minimum_size = Vector2(48, 48)
+		row.add_child(icon)
+
+		var buy_btn := Button.new()
+		buy_btn.name = "SvetBuy_" + str(i)
+		buy_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		buy_btn.custom_minimum_size = Vector2(0, 56)
+		if ref.has_theme_font("font"):
+			buy_btn.add_theme_font_override("font", ref.get_theme_font("font"))
+		buy_btn.add_theme_font_size_override("font_size", 16)
+		buy_btn.theme = ref.theme
+		if ref.has_theme_stylebox("normal"):
+			buy_btn.add_theme_stylebox_override("normal", ref.get_theme_stylebox("normal"))
+		if ref.has_theme_stylebox("hover"):
+			buy_btn.add_theme_stylebox_override("hover", ref.get_theme_stylebox("hover"))
+		if ref.has_theme_stylebox("pressed"):
+			buy_btn.add_theme_stylebox_override("pressed", ref.get_theme_stylebox("pressed"))
+		if ref.has_theme_stylebox("disabled"):
+			buy_btn.add_theme_stylebox_override("disabled", ref.get_theme_stylebox("disabled"))
+		buy_btn.add_theme_color_override("font_color", Color(0, 0, 0))
+		buy_btn.pressed.connect(_on_svet_buy_pressed.bind(i))
+		row.add_child(buy_btn)
+
 	var buttons := HBoxContainer.new()
 	buttons.add_theme_constant_override("separation", 16)
 	vbox.add_child(buttons)
@@ -2351,19 +2499,51 @@ func _build_ascend_panel() -> void:
 
 
 func _refresh_ascend_panel() -> void:
-	var gain = _calculate_heavenly_chips_gain()
+	var gain = _calculate_svet_tokens_gain()
 	var info = ascend_panel.get_node_or_null("AscendMargin/AscendVBox/AscendInfoLabel")
 	if info:
-		info.text = "Ascending resets your Lotans, LPS, and all upgrades.\n\nLifetime earned: " + _format_number(int(total_lotan_earned)) + "\nYou will gain: " + str(int(gain)) + " Heavenly Chips"
+		if total_lotan_earned >= ASCEND_THRESHOLD:
+			info.text = "Ascending resets your Lotans, LPS, and all upgrades.\n\nLifetime earned: " + _format_number(int(total_lotan_earned)) + "\nYou will gain: " + str(int(gain)) + " Svet Tokens"
+		else:
+			info.text = "Svet Tokens: " + str(int(svet_tokens)) + "\n\nEarn " + _format_number(int(ASCEND_THRESHOLD - total_lotan_earned)) + " more lifetime Lotans to ascend again."
+
+	for i in range(SVET_UPGRADES.size()):
+		var data = SVET_UPGRADES[i]
+		var level = svet_upgrade_levels[i]
+		var cost = _svet_upgrade_cost(i)
+		var buy_btn = ascend_panel.get_node_or_null("AscendMargin/AscendVBox/SvetShopVBox/SvetRow_" + str(i) + "/SvetBuy_" + str(i))
+		if buy_btn:
+			buy_btn.text = data["name"] + " (Lvl " + str(level) + ")\n" + data["desc"] + " — Cost: " + str(cost) + " Svet Tokens"
+			buy_btn.disabled = svet_tokens < cost
 
 
-func _calculate_heavenly_chips_gain() -> float:
+func _svet_upgrade_cost(i: int) -> int:
+	var data = SVET_UPGRADES[i]
+	return int(floor(data["base_cost"] * pow(1.15, svet_upgrade_levels[i])))
+
+
+func _on_svet_buy_pressed(i: int) -> void:
+	sfx_player.play()
+	var cost = _svet_upgrade_cost(i)
+	if svet_tokens < cost:
+		return
+	svet_tokens -= cost
+	svet_upgrade_levels[i] += 1
+	save_data()
+	update_ui()
+	_refresh_ascend_panel()
+
+
+func _calculate_svet_tokens_gain() -> float:
 	return floor(sqrt(total_lotan_earned / 1000000.0))
 
 
 func _on_ascend_confirm_pressed() -> void:
 	sfx_player.play()
-	heavenly_chips += _calculate_heavenly_chips_gain()
+	if total_lotan_earned < ASCEND_THRESHOLD:
+		return
+	svet_tokens += _calculate_svet_tokens_gain()
+	ascend_count += 1
 	ascend_reset()
 	ascend_panel.hide()
 	save_data()
@@ -2378,7 +2558,8 @@ func _on_ascend_cancel_pressed() -> void:
 
 func ascend_reset() -> void:
 	# Same as reset(), except it PRESERVES: total_clicks, play_time,
-	# achievements_unlocked, lotan_skin, heavenly_chips, total_lotan_earned.
+	# achievements_unlocked, lotan_skin, svet_tokens, svet_upgrade_levels,
+	# total_lotan_earned, ascend_count.
 	lotan = 0
 	amount_per_click = 1
 	lps = 0.0
@@ -2415,14 +2596,15 @@ func ascend_reset() -> void:
 	_cancel_golden_cookie_buff()
 
 
-func _build_heavenly_chips_label() -> void:
-	if $leftPanel/MarginContainer/Stats.get_node_or_null("HeavenlyChipsLabel") != null:
+func _build_svet_tokens_label() -> void:
+	var vbox = ascend_button_group.get_node_or_null("AscendButtonVBox")
+	if not vbox or vbox.get_node_or_null("SvetTokensLabel") != null:
 		return
 	var label := Label.new()
-	label.name = "HeavenlyChipsLabel"
-	label.text = "Heavenly Chips: 0"
-	label.visible = false
-	label.add_theme_font_override("font", $leftPanel/MarginContainer/Stats/Lotans.get_theme_font("font"))
-	label.add_theme_font_size_override("font_size", 22)
-	label.add_theme_constant_override("outline_size", 10)
-	$leftPanel/MarginContainer/Stats.add_child(label)
+	label.name = "SvetTokensLabel"
+	label.text = "Svet Tokens: 0"
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.add_theme_font_override("font", $Main_Menu/NewGameButton.get_theme_font("font"))
+	label.add_theme_font_size_override("font_size", 14)
+	label.add_theme_constant_override("outline_size", 6)
+	vbox.add_child(label)
